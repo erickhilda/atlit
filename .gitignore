@@ -8,6 +8,9 @@ jt
 # Build output
 /dist/
 
+# Local debug/spike scripts (not for commit)
+/debug/
+
 # Test
 *.test
 *.out

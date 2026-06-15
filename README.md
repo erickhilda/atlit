@@ -10,6 +10,7 @@ A lightweight CLI to pull Jira Cloud tickets into local markdown files.
 - Dry-run and comments-only update modes
 - Open tickets in your browser directly from the terminal
 - Print file paths for easy piping to other tools
+- Fetch Bitbucket Cloud pull requests (diff + comments) as markdown for code-review context
 
 ## Installation
 
@@ -88,6 +89,10 @@ Interactive setup wizard. Prompts for your Jira instance URL, email, API token, 
 
 Verify stored credentials against the Jira API. Prints your display name, email, account ID, and timezone on success.
 
+### `jt auth bitbucket`
+
+Set (and verify) a Bitbucket Cloud API token, stored separately from the Jira token. Create the token at <https://id.atlassian.com/manage-profile/security/api-tokens> with scopes `read:pullrequest:bitbucket` and `read:repository:bitbucket`. If `bitbucket_workspace` is configured, the token is verified against it.
+
 ### `jt config show`
 
 Display all configuration settings (token is masked).
@@ -96,7 +101,7 @@ Display all configuration settings (token is masked).
 
 Update a single configuration value.
 
-Valid keys: `instance`, `email`, `default_project`, `tickets_dir`, `fetch_comments`, `token`.
+Valid keys: `instance`, `email`, `default_project`, `tickets_dir`, `fetch_comments`, `token`, `bitbucket_workspace`, `prs_dir`, `bitbucket_token`.
 
 ```bash
 jt config set instance https://myorg.atlassian.net
@@ -135,6 +140,27 @@ Print the absolute filesystem path to a ticket's markdown file. Useful for scrip
 cat "$(jt path PROJ-123)"
 ```
 
+### `jt pr <PR-REF>`
+
+Fetch a Bitbucket Cloud pull request (metadata, diff, comments) and save it as local markdown for code-review context. Requires a Bitbucket token (`jt auth bitbucket`).
+
+Reference forms:
+
+```bash
+jt pr 4521                    # infer workspace/repo from the git remote (run inside the repo)
+jt pr widget/4521             # repo explicit, workspace from `bitbucket_workspace`
+jt pr acme/widget/4521        # fully explicit
+```
+
+| Flag | Description |
+|------|-------------|
+| `--no-diff` | Omit the unified diff (keep diffstat + comments) — useful for very large PRs |
+| `--dry-run` | Show a diff of what would change without saving |
+
+PRs are saved to `prs_dir` (default `~/.jt/prs`) as `<workspace>__<repo>__<id>.md`. A `## My Notes` section is preserved across re-fetches, and if the PR's branch/title contains a Jira key (e.g. `PROJ-1234`) it is linked — with a pointer to the local ticket file when one exists.
+
+The full unified diff is embedded by default; on a large diff `jt pr` prints a warning (it never silently truncates) so you can re-run with `--no-diff`.
+
 ## Configuration
 
 Configuration is stored in `~/.jt/config.yaml`:
@@ -156,6 +182,8 @@ fetch_comments: true
 | `tickets_dir` | Directory for saved tickets (default: `~/.jt/tickets`) |
 | `token_storage` | `keyring` (system keyring) or `file` (`~/.jt/credentials`, 0600) |
 | `fetch_comments` | Fetch and render the Comments section. Default `true`. Set `false` to skip comments on `pull`, `diff`, and `sync` (smaller payloads; existing `## Comments` blocks in local files are preserved). `jt pull --comments-only` overrides this and always refreshes comments. |
+| `bitbucket_workspace` | Default Bitbucket workspace for `jt pr <repo>/<id>` references |
+| `prs_dir` | Directory for saved pull requests (default: `~/.jt/prs`) |
 
 API tokens are stored in your system keyring when available, with an automatic fallback to an encrypted credentials file.
 

@@ -138,7 +138,13 @@ func pullCommentsOnly(cfg *config.Config, issue *jira.Issue, key string, dryRun 
 }
 
 func showDryRun(cfg *config.Config, key, newContent string) error {
-	existing, err := store.Load(cfg.TicketsDir, key)
+	return showDryRunDir(cfg.TicketsDir, key, newContent)
+}
+
+// showDryRunDir prints a line-by-line diff of newContent against the existing
+// file at <dir>/<key>.md, used by both ticket pull and PR fetch.
+func showDryRunDir(dir, key, newContent string) error {
+	existing, err := store.Load(dir, key)
 	if err != nil {
 		// No existing file -- show the full new content.
 		fmt.Printf("Would create new file for %s:\n\n", key)

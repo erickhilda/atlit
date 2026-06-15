@@ -186,6 +186,18 @@ If the user adds a `## My Notes` section at the bottom of the file, `jt pull` sh
 - [ ] MCP server mode: expose as a tool for Claude Desktop / Claude Code
 - [ ] Offline full-text search across all local tickets (using bleve or similar)
 
+### Phase 7 — Bitbucket PR support (`jt pr`) [DONE]
+
+**Goal:** Pull a Bitbucket Cloud PR (diff + comments + metadata) into a local
+markdown file for code-review context, mirroring `jt pull` for tickets.
+
+Read-only, self-serve via a scoped Bitbucket API token — useful when the official
+Atlassian MCP Bitbucket integration isn't available.
+
+- [x] Milestone 0 — auth spike: validated `email:token` + read scopes against `api.bitbucket.org`
+- [x] Milestone 1 — `internal/bitbucket` client + `jt pr <id>` (git-remote inference), `--no-diff`, My Notes preservation, `~/.jt/prs/<workspace>__<repo>__<id>.md`, Jira-key linking
+- [ ] Deferred (v2): write-back (approve/comment/merge), `jt pr view/open/path/list`, diff path-filtering, Bitbucket Server/DC
+
 ---
 
 ## Architecture

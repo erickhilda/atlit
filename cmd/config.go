@@ -23,13 +23,16 @@ var configShowCmd = &cobra.Command{
 var configSetCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Update a configuration setting",
-	Long: `Valid keys: instance, email, default_project, tickets_dir, fetch_comments, token
+	Long: `Valid keys: instance, email, default_project, tickets_dir, fetch_comments,
+token, bitbucket_workspace, prs_dir, bitbucket_token
 
 Examples:
   jt config set instance https://myorg.atlassian.net
   jt config set default_project PROJ
   jt config set fetch_comments false
-  jt config set token <new-api-token>`,
+  jt config set token <new-api-token>
+  jt config set bitbucket_workspace acme
+  jt config set bitbucket_token <new-bitbucket-api-token>`,
 	Args: cobra.ExactArgs(2),
 	RunE: runConfigSet,
 }
@@ -52,13 +55,21 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 		token = maskToken(t)
 	}
 
-	fmt.Printf("instance:        %s\n", cfg.Instance)
-	fmt.Printf("email:           %s\n", cfg.Email)
-	fmt.Printf("default_project: %s\n", cfg.DefaultProject)
-	fmt.Printf("tickets_dir:     %s\n", cfg.TicketsDir)
-	fmt.Printf("token_storage:   %s\n", cfg.TokenStorage)
-	fmt.Printf("fetch_comments:  %t\n", cfg.ShouldFetchComments())
-	fmt.Printf("token:           %s\n", token)
+	bbToken := "(not stored)"
+	if t, err := config.GetBitbucketToken(cfg); err == nil && t != "" {
+		bbToken = maskToken(t)
+	}
+
+	fmt.Printf("instance:            %s\n", cfg.Instance)
+	fmt.Printf("email:               %s\n", cfg.Email)
+	fmt.Printf("default_project:     %s\n", cfg.DefaultProject)
+	fmt.Printf("tickets_dir:         %s\n", cfg.TicketsDir)
+	fmt.Printf("token_storage:       %s\n", cfg.TokenStorage)
+	fmt.Printf("fetch_comments:      %t\n", cfg.ShouldFetchComments())
+	fmt.Printf("token:               %s\n", token)
+	fmt.Printf("bitbucket_workspace: %s\n", cfg.BitbucketWorkspace)
+	fmt.Printf("prs_dir:             %s\n", cfg.PRsDirOrDefault())
+	fmt.Printf("bitbucket_token:     %s\n", bbToken)
 	return nil
 }
 
@@ -68,6 +79,9 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 
 	if key == "token" {
 		return setToken(value)
+	}
+	if key == "bitbucket_token" {
+		return setBitbucketToken(value)
 	}
 
 	cfg, err := config.Load()
@@ -93,8 +107,12 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("fetch_comments must be true or false, got %q", value)
 		}
 		cfg.FetchComments = &b
+	case "bitbucket_workspace":
+		cfg.BitbucketWorkspace = value
+	case "prs_dir":
+		cfg.PRsDir = value
 	default:
-		return fmt.Errorf("unknown key %q; valid keys: instance, email, default_project, tickets_dir, fetch_comments, token", key)
+		return fmt.Errorf("unknown key %q; valid keys: instance, email, default_project, tickets_dir, fetch_comments, token, bitbucket_workspace, prs_dir, bitbucket_token", key)
 	}
 
 	if err := config.Save(cfg); err != nil {
@@ -118,6 +136,19 @@ func setToken(value string) error {
 		return err
 	}
 	fmt.Printf("token updated (stored via %s)\n", storage)
+	return nil
+}
+
+func setBitbucketToken(value string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	storage, err := config.SetBitbucketToken(cfg.Email, value)
+	if err != nil {
+		return fmt.Errorf("storing Bitbucket token: %w", err)
+	}
+	fmt.Printf("bitbucket_token updated (stored via %s)\n", storage)
 	return nil
 }
 
