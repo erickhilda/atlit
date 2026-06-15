@@ -34,6 +34,19 @@ type Config struct {
 	// FetchComments controls whether pull/diff/sync request and render comments.
 	// Pointer so "field absent" means "default true" (backward compatible).
 	FetchComments *bool `yaml:"fetch_comments,omitempty"`
+	// BitbucketWorkspace is the default workspace for `jt pr <repo>/<id>` refs.
+	BitbucketWorkspace string `yaml:"bitbucket_workspace,omitempty"`
+	// PRsDir is where `jt pr` saves pull-request markdown (default ~/.jt/prs).
+	PRsDir string `yaml:"prs_dir,omitempty"`
+}
+
+// PRsDirOrDefault returns the configured PR storage directory, defaulting to
+// ~/.jt/prs when unset.
+func (c *Config) PRsDirOrDefault() string {
+	if c == nil || c.PRsDir == "" {
+		return "~/.jt/prs"
+	}
+	return c.PRsDir
 }
 
 // ShouldFetchComments returns whether comments should be fetched and rendered.

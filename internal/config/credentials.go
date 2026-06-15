@@ -11,6 +11,12 @@ import (
 const (
 	keyringService = "jt-cli"
 	credFileName   = "credentials"
+	// bitbucketKeyringSuffix namespaces the Bitbucket token under a second
+	// keyring account so it sits beside the Jira token without colliding.
+	bitbucketKeyringSuffix = "#bitbucket"
+	// bitbucketCredFileName holds the Bitbucket token in the file-fallback case,
+	// kept separate from the Jira credentials file to avoid format changes.
+	bitbucketCredFileName = "credentials-bitbucket"
 )
 
 // SetToken stores the API token. It tries the system keyring first;
@@ -50,6 +56,57 @@ func DeleteToken(cfg *Config) error {
 	default:
 		return fmt.Errorf("unknown token_storage: %q", cfg.TokenStorage)
 	}
+}
+
+// SetBitbucketToken stores the Bitbucket API token under a second keyring
+// account (email + suffix), falling back to a separate file.
+func SetBitbucketToken(email, token string) (TokenStorage, error) {
+	if isKeyringAvailable() {
+		if err := keyring.Set(keyringService, email+bitbucketKeyringSuffix, token); err == nil {
+			return TokenStorageKeyring, nil
+		}
+	}
+	return TokenStorageFile, setBitbucketTokenFile(token)
+}
+
+// GetBitbucketToken retrieves the Bitbucket API token using the configured
+// storage method.
+func GetBitbucketToken(cfg *Config) (string, error) {
+	switch cfg.TokenStorage {
+	case TokenStorageKeyring:
+		token, err := keyring.Get(keyringService, cfg.Email+bitbucketKeyringSuffix)
+		if err != nil {
+			return "", fmt.Errorf("reading Bitbucket token from keyring: %w", err)
+		}
+		return token, nil
+	case TokenStorageFile:
+		return getBitbucketTokenFile()
+	default:
+		return "", fmt.Errorf("unknown token_storage: %q", cfg.TokenStorage)
+	}
+}
+
+func setBitbucketTokenFile(token string) error {
+	dir, err := ConfigDir()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("creating config directory: %w", err)
+	}
+	return os.WriteFile(filepath.Join(dir, bitbucketCredFileName), []byte(token), 0600)
+}
+
+func getBitbucketTokenFile() (string, error) {
+	dir, err := ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(filepath.Join(dir, bitbucketCredFileName))
+	if err != nil {
+		return "", fmt.Errorf("reading Bitbucket credentials file: %w", err)
+	}
+	return string(data), nil
 }
 
 // isKeyringAvailable tests whether the system keyring works by doing
