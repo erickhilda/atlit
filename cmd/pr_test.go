@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/erickhilda/jt/internal/bitbucket"
 	"github.com/erickhilda/jt/internal/config"
@@ -64,6 +66,90 @@ func TestDetectJiraKey(t *testing.T) {
 func TestPrFileKey(t *testing.T) {
 	if got := prFileKey("acme", "widget", 42); got != "acme__widget__42" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestMapPRStates(t *testing.T) {
+	cases := []struct {
+		in     string
+		states string // comma-joined
+		label  string
+		err    bool
+	}{
+		{"", "OPEN", "Open", false},
+		{"open", "OPEN", "Open", false},
+		{"OPEN", "OPEN", "Open", false},
+		{"merged", "MERGED", "Merged", false},
+		{"declined", "DECLINED", "Declined", false},
+		{"all", "", "All", false},
+		{"bogus", "", "", true},
+	}
+	for _, tc := range cases {
+		states, label, err := mapPRStates(tc.in)
+		if tc.err {
+			if err == nil {
+				t.Errorf("%q: expected error", tc.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%q: unexpected error: %v", tc.in, err)
+			continue
+		}
+		if strings.Join(states, ",") != tc.states || label != tc.label {
+			t.Errorf("%q: got %v/%q, want %s/%s", tc.in, states, label, tc.states, tc.label)
+		}
+	}
+}
+
+func TestResolveRepoRef(t *testing.T) {
+	cfg := &config.Config{BitbucketWorkspace: "acme"}
+
+	ws, repo, err := resolveRepoRef("other/gadget", cfg)
+	if err != nil || ws != "other" || repo != "gadget" {
+		t.Errorf("ws/repo: %s/%s err=%v", ws, repo, err)
+	}
+
+	ws, repo, err = resolveRepoRef("widget", cfg)
+	if err != nil || ws != "acme" || repo != "widget" {
+		t.Errorf("repo + config ws: %s/%s err=%v", ws, repo, err)
+	}
+
+	if _, _, err := resolveRepoRef("a/b/c", cfg); err == nil {
+		t.Error("expected error for 3-part reference")
+	}
+	if _, _, err := resolveRepoRef("/gadget", cfg); err == nil {
+		t.Error("expected error for empty workspace")
+	}
+}
+
+func TestTruncate(t *testing.T) {
+	cases := []struct {
+		in   string
+		max  int
+		want string
+	}{
+		{"short", 10, "short"},
+		{"exactlyten", 10, "exactlyten"},
+		{"this is way too long", 10, "this is w…"},
+		{"héllo wörld", 6, "héllo…"}, // rune-safe: multibyte not split mid-byte
+		{"x", 0, ""},
+	}
+	for _, tc := range cases {
+		if got := truncate(tc.in, tc.max); got != tc.want {
+			t.Errorf("truncate(%q, %d) = %q, want %q", tc.in, tc.max, got, tc.want)
+		}
+	}
+}
+
+func TestFormatPRUpdated(t *testing.T) {
+	now := time.Date(2026, 6, 21, 12, 0, 0, 0, time.UTC)
+	// Bitbucket-style timestamp: colon offset + fractional seconds, ~2.5d before now.
+	if got := formatPRUpdated(now, "2026-06-19T00:00:00.123456+00:00"); got != "2d ago" {
+		t.Errorf("relative age = %q, want 2d ago", got)
+	}
+	if got := formatPRUpdated(now, "not-a-time"); got != "not-a-time" {
+		t.Errorf("fallback = %q, want raw passthrough", got)
 	}
 }
 
