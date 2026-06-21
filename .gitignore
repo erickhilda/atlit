@@ -11,6 +11,9 @@ jt
 # Local debug/spike scripts (not for commit)
 /debug/
 
+# Local planning/design docs (not for commit)
+/docs/
+
 # Test
 *.test
 *.out
