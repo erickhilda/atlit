@@ -347,6 +347,73 @@ func panelLabel(panelType string) string {
 	}
 }
 
+// SpliceSection replaces the content of a named heading section in doc with
+// newNodes. The section runs from the matching heading node through the node
+// before the next heading of equal or lower level (i.e. equal or smaller
+// level number), or to the end of doc.Content. If the heading is not found,
+// newNodes are appended to doc.Content. Returns a shallow copy; does not
+// mutate the original.
+func SpliceSection(doc *ADFDoc, heading string, newNodes []ADFNode) *ADFDoc {
+	out := &ADFDoc{Type: doc.Type, Version: doc.Version}
+
+	headingLower := strings.ToLower(strings.TrimSpace(heading))
+	found := false
+	skip := false
+	foundLevel := 0
+
+	for _, node := range doc.Content {
+		if skip {
+			// Stop skipping at the next heading of equal or higher hierarchy
+			// (level <= foundLevel means same or broader section).
+			if node.Type == "heading" {
+				lvl := attrInt(node.Attrs, "level", 1)
+				if lvl <= foundLevel {
+					skip = false
+					out.Content = append(out.Content, node)
+				}
+				// else: still inside the old section body, keep skipping
+			}
+			continue
+		}
+
+		if !found && node.Type == "heading" {
+			// Extract plain text from the heading node.
+			var sb strings.Builder
+			for _, child := range node.Content {
+				if child.Type == "text" {
+					sb.WriteString(child.Text)
+				}
+			}
+			if strings.ToLower(strings.TrimSpace(sb.String())) == headingLower {
+				found = true
+				foundLevel = attrInt(node.Attrs, "level", 1)
+				// Emit the heading itself, then the new content.
+				out.Content = append(out.Content, node)
+				out.Content = append(out.Content, newNodes...)
+				skip = true
+				continue
+			}
+		}
+
+		out.Content = append(out.Content, node)
+	}
+
+	if !found {
+		// Section absent: append heading + content.
+		headingNode := ADFNode{
+			Type: "heading",
+			Attrs: map[string]any{"level": 2},
+			Content: []ADFNode{
+				{Type: "text", Text: heading},
+			},
+		}
+		out.Content = append(out.Content, headingNode)
+		out.Content = append(out.Content, newNodes...)
+	}
+
+	return out
+}
+
 func attrStr(attrs map[string]any, key string) string {
 	if attrs == nil {
 		return ""

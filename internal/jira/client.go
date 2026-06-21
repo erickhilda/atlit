@@ -293,6 +293,42 @@ func decodeIssue(rawIssue json.RawMessage, fallbackNames map[string]string) (*Is
 	return issue, nil
 }
 
+// UpdateDescription replaces the description of a Jira issue using
+// PUT /rest/api/3/issue/{key}. Returns nil on 204 No Content.
+func (c *Client) UpdateDescription(key string, doc *ADFDoc) error {
+	payload := struct {
+		Fields struct {
+			Description *ADFDoc `json:"description"`
+		} `json:"fields"`
+	}{}
+	payload.Fields.Description = doc
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshaling update payload: %w", err)
+	}
+
+	resp, err := c.do(http.MethodPut, "/rest/api/3/issue/"+key, strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+	_, statusCode, err := readAndClose(resp)
+	if err != nil {
+		return err
+	}
+
+	switch statusCode {
+	case http.StatusNoContent:
+		return nil
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return ErrUnauthorized
+	case http.StatusNotFound:
+		return ErrNotFound
+	default:
+		return &APIError{StatusCode: statusCode, Message: fmt.Sprintf("unexpected status %d", statusCode)}
+	}
+}
+
 // readAndClose reads the full body and closes it, returning data and status code.
 func readAndClose(resp *http.Response) ([]byte, int, error) {
 	defer func() { _ = resp.Body.Close() }()
