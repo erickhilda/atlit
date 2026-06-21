@@ -100,6 +100,70 @@ func TestGetPullRequestCommentsPagination(t *testing.T) {
 	}
 }
 
+func TestListPullRequestsPagination(t *testing.T) {
+	var gotStates []string
+	var gotSort, gotPagelen string
+	var ts *httptest.Server
+	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "2" {
+			_, _ = w.Write([]byte(`{"values":[{"id":2,"title":"Two"}]}`))
+			return
+		}
+		q := r.URL.Query()
+		gotStates = q["state"]
+		gotSort = q.Get("sort")
+		gotPagelen = q.Get("pagelen")
+		_, _ = fmt.Fprintf(w, `{"values":[{"id":1,"title":"One"}],"next":"%s/repositories/ws/repo/pullrequests?page=2"}`, ts.URL)
+	}))
+	defer ts.Close()
+
+	prs, err := testClient(ts).ListPullRequests("ws", "repo", []string{"OPEN", "MERGED"}, 0)
+	if err != nil {
+		t.Fatalf("ListPullRequests: %v", err)
+	}
+	if len(prs) != 2 || prs[0].ID != 1 || prs[1].ID != 2 {
+		t.Fatalf("got %d PRs %v, want ids 1,2", len(prs), prs)
+	}
+	if strings.Join(gotStates, ",") != "OPEN,MERGED" {
+		t.Errorf("state params = %v, want [OPEN MERGED]", gotStates)
+	}
+	if gotSort != "-updated_on" {
+		t.Errorf("sort = %q, want -updated_on", gotSort)
+	}
+	if gotPagelen != "50" {
+		t.Errorf("pagelen = %q, want 50", gotPagelen)
+	}
+}
+
+func TestListPullRequestsLimit(t *testing.T) {
+	var gotStates []string
+	pages := 0
+	var ts *httptest.Server
+	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pages++
+		if pages == 1 {
+			gotStates = r.URL.Query()["state"]
+		}
+		// Always return 3 with a next link, so only the limit stops the loop.
+		_, _ = fmt.Fprintf(w, `{"values":[{"id":1},{"id":2},{"id":3}],"next":"%s/repositories/ws/repo/pullrequests?page=%d"}`, ts.URL, pages+1)
+	}))
+	defer ts.Close()
+
+	prs, err := testClient(ts).ListPullRequests("ws", "repo", nil, 2)
+	if err != nil {
+		t.Fatalf("ListPullRequests: %v", err)
+	}
+	if len(prs) != 2 {
+		t.Fatalf("got %d PRs, want 2 (limit)", len(prs))
+	}
+	if pages != 1 {
+		t.Errorf("made %d page requests, want 1 (limit hit on first page)", pages)
+	}
+	if len(gotStates) != 0 {
+		t.Errorf("state params = %v, want none for nil states (all)", gotStates)
+	}
+}
+
 func TestStatusErrors(t *testing.T) {
 	cases := []struct {
 		code int

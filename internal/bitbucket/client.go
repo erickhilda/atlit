@@ -107,6 +107,42 @@ func (c *Client) GetPullRequestComments(workspace, repo string, id int) ([]Comme
 	return all, nil
 }
 
+// ListPullRequests returns pull requests for a repo, newest-updated first,
+// following pagination up to limit results. states filters by PR state
+// ("OPEN"/"MERGED"/"DECLINED"/"SUPERSEDED"); an empty slice returns all states.
+// A limit <= 0 means no cap. Each list entry is an abbreviated PR object, but it
+// carries every field jt's table needs, so no per-PR follow-up call is made.
+func (c *Client) ListPullRequests(workspace, repo string, states []string, limit int) ([]PullRequest, error) {
+	q := url.Values{}
+	q.Set("pagelen", "50")
+	q.Set("sort", "-updated_on")
+	for _, s := range states {
+		q.Add("state", s)
+	}
+	next := fmt.Sprintf("/repositories/%s/%s/pullrequests?%s", workspace, repo, q.Encode())
+	var all []PullRequest
+	for next != "" {
+		body, err := c.getJSON(next)
+		if err != nil {
+			return nil, err
+		}
+		var page struct {
+			Values []PullRequest `json:"values"`
+			Next   string        `json:"next"`
+		}
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, fmt.Errorf("decoding pull requests: %w", err)
+		}
+		all = append(all, page.Values...)
+		if limit > 0 && len(all) >= limit {
+			all = all[:limit]
+			break
+		}
+		next = page.Next
+	}
+	return all, nil
+}
+
 // VerifyWorkspace checks the token can read the given workspace's repositories.
 func (c *Client) VerifyWorkspace(workspace string) error {
 	_, err := c.getJSON("/repositories/" + url.PathEscape(workspace) + "?pagelen=1")

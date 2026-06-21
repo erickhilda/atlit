@@ -162,6 +162,25 @@ PRs are saved to `prs_dir` (default `~/.jt/prs`) as `<workspace>__<repo>__<id>.m
 
 The full unified diff is embedded by default; on a large diff `jt pr` prints a warning (it never silently truncates) so you can re-run with `--no-diff`.
 
+### `jt pr list [REPO-REF]`
+
+List a repository's pull requests as a table on stdout (open by default, newest-updated first). Nothing is written to disk — use it to find a PR, then run `jt pr <id>` to fetch its diff and comments.
+
+Reference forms:
+
+```bash
+jt pr list                    # infer workspace/repo from the git remote (run inside the repo)
+jt pr list widget             # repo explicit, workspace from `bitbucket_workspace`
+jt pr list acme/widget        # fully explicit
+```
+
+| Flag | Description |
+|------|-------------|
+| `--state` | Filter by state: `open` (default), `merged`, `declined`, or `all` |
+| `--limit` | Maximum number of PRs to list (default 30; counts rows shown, not the repo total) |
+
+The table shows the PR id, title, linked Jira key (from the branch/title, `-` when absent), author, and a relative "updated" age. The `--limit` count caps the rows fetched, so the header count reflects what was shown rather than the repository's full PR total.
+
 ### `jt page <PAGE-ID | URL>`
 
 Fetch a Confluence Cloud page (title, metadata, body) and save it as local markdown for offline reading and LLM context. The page body is converted from Atlassian Document Format to markdown using the same converter as `jt pull`.

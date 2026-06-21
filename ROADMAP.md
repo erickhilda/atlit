@@ -196,7 +196,8 @@ Atlassian MCP Bitbucket integration isn't available.
 
 - [x] Milestone 0 — auth spike: validated `email:token` + read scopes against `api.bitbucket.org`
 - [x] Milestone 1 — `internal/bitbucket` client + `jt pr <id>` (git-remote inference), `--no-diff`, My Notes preservation, `~/.jt/prs/<workspace>__<repo>__<id>.md`, Jira-key linking
-- [ ] Deferred (v2): write-back (approve/comment/merge), `jt pr view/open/path/list`, diff path-filtering, Bitbucket Server/DC
+- [x] `jt pr list [repo]` — repo-scoped PR table on stdout (`--state` open|merged|declined|all, `--limit`), newest-updated first, Jira-key column; no files written
+- [ ] Deferred (v2): write-back (approve/comment/merge), `jt pr view/open/path`, workspace-wide `jt pr list --workspace` + `--mine`, `--json`, diff path-filtering, Bitbucket Server/DC
 
 ### Phase 8 — Confluence page support (`jt page`) [DONE]
 

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/erickhilda/jt/internal/bitbucket"
 	"github.com/erickhilda/jt/internal/config"
@@ -36,10 +37,191 @@ Reference forms:
 	RunE: runPR,
 }
 
+var prListCmd = &cobra.Command{
+	Use:   "list [repo | workspace/repo]",
+	Short: "List a repository's pull requests",
+	Long: `Lists a Bitbucket Cloud repository's pull requests as a table on stdout (open
+by default, newest-updated first). Nothing is written to disk; run 'jt pr <id>'
+to fetch a chosen PR's diff and comments.
+
+Repo reference forms:
+  jt pr list                 infer workspace/repo from the git remote (run inside the repo)
+  jt pr list widget          repo explicit, workspace from config (bitbucket_workspace)
+  jt pr list acme/widget     fully explicit`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runPRList,
+}
+
 func init() {
 	prCmd.Flags().Bool("no-diff", false, "Omit the unified diff (keep diffstat + comments)")
 	prCmd.Flags().Bool("dry-run", false, "Show what would change without saving")
+
+	prListCmd.Flags().String("state", "open", "Filter by state: open|merged|declined|all")
+	prListCmd.Flags().Int("limit", 30, "Maximum number of PRs to list (rows shown, not the repo total)")
+	prCmd.AddCommand(prListCmd)
+
 	rootCmd.AddCommand(prCmd)
+}
+
+func runPRList(cmd *cobra.Command, args []string) error {
+	stateFlag, _ := cmd.Flags().GetString("state")
+	limit, _ := cmd.Flags().GetInt("limit")
+
+	states, label, err := mapPRStates(stateFlag)
+	if err != nil {
+		return err
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	arg := ""
+	if len(args) == 1 {
+		arg = args[0]
+	}
+	workspace, repo, err := resolveRepoRef(arg, cfg)
+	if err != nil {
+		return err
+	}
+
+	token, err := config.GetBitbucketToken(cfg)
+	if err != nil {
+		return fmt.Errorf("retrieving Bitbucket token (run 'jt auth bitbucket'): %w", err)
+	}
+
+	client := bitbucket.NewClient(cfg.Email, token)
+	prs, err := client.ListPullRequests(workspace, repo, states, limit)
+	if err != nil {
+		return wrapBBListError(err, workspace, repo)
+	}
+
+	printPRList(workspace, repo, label, prs)
+	return nil
+}
+
+// mapPRStates maps the --state flag to the API state filter and a display label.
+// "all" returns a nil slice (no state filter).
+func mapPRStates(flag string) (states []string, label string, err error) {
+	switch strings.ToLower(strings.TrimSpace(flag)) {
+	case "", "open":
+		return []string{"OPEN"}, "Open", nil
+	case "merged":
+		return []string{"MERGED"}, "Merged", nil
+	case "declined":
+		return []string{"DECLINED"}, "Declined", nil
+	case "all":
+		return nil, "All", nil
+	default:
+		return nil, "", fmt.Errorf("invalid --state %q (want open|merged|declined|all)", flag)
+	}
+}
+
+// resolveRepoRef parses an optional "repo" or "workspace/repo" argument into a
+// workspace and repo, inferring from the git remote / config when omitted. It
+// mirrors resolvePRRef without the trailing PR id.
+func resolveRepoRef(arg string, cfg *config.Config) (workspace, repo string, err error) {
+	if arg == "" {
+		ws, r, gerr := inferFromGitRemote()
+		if gerr != nil {
+			return "", "", fmt.Errorf("not in a Bitbucket repo (%v); use 'jt pr list <repo>' or 'jt pr list <workspace>/<repo>'", gerr)
+		}
+		return ws, r, nil
+	}
+	parts := strings.Split(arg, "/")
+	switch len(parts) {
+	case 2: // workspace/repo
+		if parts[0] == "" || parts[1] == "" {
+			return "", "", fmt.Errorf("invalid repo reference %q", arg)
+		}
+		return parts[0], parts[1], nil
+	case 1: // repo -> workspace from config, falling back to the git remote
+		repo = parts[0]
+		workspace = cfg.BitbucketWorkspace
+		if workspace == "" {
+			if ws, _, gerr := inferFromGitRemote(); gerr == nil {
+				workspace = ws
+			}
+		}
+		if workspace == "" {
+			return "", "", fmt.Errorf("no workspace: set 'bitbucket_workspace' in config or use 'workspace/%s'", arg)
+		}
+		return workspace, repo, nil
+	default:
+		return "", "", fmt.Errorf("invalid repo reference %q", arg)
+	}
+}
+
+// printPRList renders the PR table (or an empty-result line) to stdout.
+func printPRList(workspace, repo, label string, prs []bitbucket.PullRequest) {
+	if len(prs) == 0 {
+		if label == "All" {
+			fmt.Printf("No PRs for %s/%s\n", workspace, repo)
+		} else {
+			fmt.Printf("No %s PRs for %s/%s\n", strings.ToLower(label), workspace, repo)
+		}
+		return
+	}
+
+	fmt.Printf("%s PRs: %s/%s (%d)\n\n", label, workspace, repo, len(prs))
+	fmt.Printf("%-6s %-40s %-16s %-14s %s\n", "#", "TITLE", "JIRA", "AUTHOR", "UPDATED")
+
+	now := time.Now()
+	for i := range prs {
+		pr := &prs[i]
+		jira := detectJiraKey(pr)
+		if jira == "" {
+			jira = "-"
+		}
+		fmt.Printf("%-6d %-40s %-16s %-14s %s\n",
+			pr.ID,
+			truncate(pr.Title, 40),
+			jira,
+			truncate(pr.Author.DisplayName, 14),
+			formatPRUpdated(now, pr.UpdatedOn),
+		)
+	}
+}
+
+// truncate shortens s to at most max runes, marking elision with an ellipsis.
+// Rune-based so multibyte titles stay aligned under fmt's rune-counted width.
+func truncate(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	if max == 1 {
+		return "…"
+	}
+	return string(r[:max-1]) + "…"
+}
+
+// formatPRUpdated renders a Bitbucket updated_on timestamp as a relative age.
+// Bitbucket is an Atlassian product and emits the same timestamp family as Jira,
+// so parseJiraTime handles it; the raw value is shown if parsing ever fails.
+func formatPRUpdated(now time.Time, updatedOn string) string {
+	t, err := parseJiraTime(updatedOn)
+	if err != nil {
+		return updatedOn
+	}
+	return humanAge(now, t)
+}
+
+func wrapBBListError(err error, workspace, repo string) error {
+	switch {
+	case errors.Is(err, bitbucket.ErrUnauthorized):
+		return fmt.Errorf("authentication failed: %w (re-run 'jt auth bitbucket')", err)
+	case errors.Is(err, bitbucket.ErrForbidden):
+		return err
+	case errors.Is(err, bitbucket.ErrNotFound):
+		return fmt.Errorf("repo %s/%s not found or no access", workspace, repo)
+	default:
+		return err
+	}
 }
 
 func runPR(cmd *cobra.Command, args []string) error {
