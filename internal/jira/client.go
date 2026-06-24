@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -201,9 +202,13 @@ func parseEpic(raw json.RawMessage) *Epic {
 }
 
 // SearchIssues performs a JQL search using the /rest/api/3/search/jql endpoint
-// and returns all matching issues (handling pagination automatically).
-// The fields parameter controls which fields are returned; pass nil for defaults.
-func (c *Client) SearchIssues(jql string, fields []string) (*SearchResult, error) {
+// and returns matching issues (handling pagination automatically).
+//
+// The fields parameter controls which fields are returned; pass nil for
+// defaults. maxResults caps the number of issues returned: pagination stops
+// once that many have been collected, so a broad query does not fetch the whole
+// result set. Pass 0 (or a negative value) to fetch every matching issue.
+func (c *Client) SearchIssues(jql string, fields []string, maxResults int) (*SearchResult, error) {
 	result := &SearchResult{}
 	var nextPageToken string
 
@@ -213,6 +218,14 @@ func (c *Client) SearchIssues(jql string, fields []string) (*SearchResult, error
 		params.Set("expand", "names")
 		if len(fields) > 0 {
 			params.Set("fields", strings.Join(fields, ","))
+		}
+		if maxResults > 0 {
+			// Request only what is still needed, capped at the API page max (100).
+			remaining := maxResults - len(result.Issues)
+			if remaining > 100 {
+				remaining = 100
+			}
+			params.Set("maxResults", strconv.Itoa(remaining))
 		}
 		if nextPageToken != "" {
 			params.Set("nextPageToken", nextPageToken)
@@ -259,6 +272,12 @@ func (c *Client) SearchIssues(jql string, fields []string) (*SearchResult, error
 			result.Issues = append(result.Issues, *issue)
 		}
 
+		// Stop once the caller's cap is reached (trim any overshoot from the
+		// final page) or the server reports the last page.
+		if maxResults > 0 && len(result.Issues) >= maxResults {
+			result.Issues = result.Issues[:maxResults]
+			break
+		}
 		if page.IsLast || page.NextPageToken == "" {
 			result.IsLast = true
 			break
@@ -267,6 +286,42 @@ func (c *Client) SearchIssues(jql string, fields []string) (*SearchResult, error
 	}
 
 	return result, nil
+}
+
+// SearchUsers calls GET /rest/api/3/user/search to find users whose name or
+// email matches the query. It is used to resolve a human-friendly assignee name
+// (e.g. "alice") to an accountId for use in JQL, since Jira Cloud matches the
+// assignee field by accountId rather than display name.
+func (c *Client) SearchUsers(query string) ([]User, error) {
+	params := url.Values{}
+	params.Set("query", query)
+	params.Set("maxResults", "50")
+
+	resp, err := c.do(http.MethodGet, "/rest/api/3/user/search?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	data, statusCode, err := readAndClose(resp)
+	if err != nil {
+		return nil, err
+	}
+	switch statusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return nil, ErrUnauthorized
+	}
+	if statusCode != http.StatusOK {
+		return nil, &APIError{
+			StatusCode: statusCode,
+			Message:    string(data),
+		}
+	}
+
+	var users []User
+	if err := json.Unmarshal(data, &users); err != nil {
+		return nil, fmt.Errorf("decoding user search response: %w", err)
+	}
+	return users, nil
 }
 
 // decodeIssue performs the two-pass JSON decode for a single issue.

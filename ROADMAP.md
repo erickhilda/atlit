@@ -160,9 +160,11 @@ If the user adds a `## My Notes` section at the bottom of the file, `jt pull` sh
 - [ ] `jt list` — List locally saved tickets (from filesystem)
   - Show: key, title, status, last fetched
   - Flags: `--sort`, `--filter-status`
-- [ ] `jt search <JQL>` — Run a JQL query against Jira, display results
-  - e.g., `jt search "assignee = currentUser() AND status = 'In Progress'"`
-- [ ] `jt mine` — Shortcut for tickets assigned to you (current sprint)
+- [x] `jt search` — Search Jira and list results as a stdout table (DONE, 2026-06-24)
+  - Preset filters: `--status` (comma -> `status in (...)`), `--assignee` (name/email resolved to an account via user-search), `--mine` (`assignee = currentUser()`), composed with `AND` and scoped to `default_project` (`--project` / `--all-projects` override the scope)
+  - `--jql "<raw>"` advanced escape hatch (mutually exclusive with the preset filters); `--limit` caps rows shown
+  - Folds in the planned `jt mine` (now `jt search --mine`)
+  - See `docs/I24062026_jt-search.md`
 - [ ] `jt sprint` — Show current sprint board for default project
 - [ ] `jt pull --jql <JQL>` — Bulk pull all tickets matching a query
   - e.g., `jt pull --jql "sprint = currentSprint() AND assignee = currentUser()"`
@@ -301,7 +303,8 @@ All via Jira Cloud REST API v3 (`/rest/api/3/`):
 | `GET /rest/api/3/issue/{key}` | `jt pull` — full ticket with comments |
 | `GET /rest/api/3/issue/{key}?expand=renderedFields,names,changelog` | Extended pull |
 | `GET /rest/api/3/issue/{key}/comment` | Comments (paginated) |
-| `GET /rest/api/3/search?jql=...` | `jt search`, `jt mine`, `jt sprint` |
+| `GET /rest/api/3/search/jql?jql=...` | `jt search`, `jt sync` |
+| `GET /rest/api/3/user/search?query=...` | `jt search --assignee` (name -> accountId) |
 | `GET /rest/api/3/myself` | `jt auth test` |
 | `GET /rest/api/3/project/{key}` | Project info |
 | `POST /rest/api/3/issue/{key}/comment` | `jt comment` (Phase 6) |

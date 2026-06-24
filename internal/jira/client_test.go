@@ -421,7 +421,7 @@ func TestSearchIssuesSuccess(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(srv.URL, "test@example.com", "token123")
-	result, err := client.SearchIssues("key = PROJ-123", nil)
+	result, err := client.SearchIssues("key = PROJ-123", nil, 0)
 	if err != nil {
 		t.Fatalf("SearchIssues: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestSearchIssuesEmpty(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(srv.URL, "test@example.com", "token123")
-	result, err := client.SearchIssues("key = NOPE-1", nil)
+	result, err := client.SearchIssues("key = NOPE-1", nil, 0)
 	if err != nil {
 		t.Fatalf("SearchIssues: %v", err)
 	}
@@ -485,7 +485,7 @@ func TestSearchIssuesPagination(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(srv.URL, "test@example.com", "token123")
-	result, err := client.SearchIssues("project = PROJ", nil)
+	result, err := client.SearchIssues("project = PROJ", nil, 0)
 	if err != nil {
 		t.Fatalf("SearchIssues: %v", err)
 	}
@@ -510,7 +510,7 @@ func TestSearchIssuesUnauthorized(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(srv.URL, "bad@example.com", "wrong")
-	_, err := client.SearchIssues("key = PROJ-1", nil)
+	_, err := client.SearchIssues("key = PROJ-1", nil, 0)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Errorf("expected ErrUnauthorized, got: %v", err)
 	}
@@ -524,7 +524,7 @@ func TestSearchIssuesServerError(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(srv.URL, "test@example.com", "token123")
-	_, err := client.SearchIssues("key = PROJ-1", nil)
+	_, err := client.SearchIssues("key = PROJ-1", nil, 0)
 	if err == nil {
 		t.Fatal("expected error for 500")
 	}
@@ -534,6 +534,86 @@ func TestSearchIssuesServerError(t *testing.T) {
 	}
 	if apiErr.StatusCode != 500 {
 		t.Errorf("StatusCode = %d, want 500", apiErr.StatusCode)
+	}
+}
+
+func TestSearchIssuesLimitStopsPagination(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		// The first (and only expected) page should request exactly maxResults=1.
+		if got := r.URL.Query().Get("maxResults"); got != "1" {
+			t.Errorf("maxResults = %q, want 1", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"issues": [
+				{"key": "PROJ-1", "fields": {"summary": "First"}},
+				{"key": "PROJ-2", "fields": {"summary": "Second"}}
+			],
+			"nextPageToken": "page2token",
+			"isLast": false
+		}`))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "test@example.com", "token123")
+	result, err := client.SearchIssues("project = PROJ", nil, 1)
+	if err != nil {
+		t.Fatalf("SearchIssues: %v", err)
+	}
+	if callCount != 1 {
+		t.Errorf("expected 1 API call (limit reached), got %d", callCount)
+	}
+	if len(result.Issues) != 1 {
+		t.Fatalf("Issues count = %d, want 1 (trimmed to limit)", len(result.Issues))
+	}
+	if result.Issues[0].Key != "PROJ-1" {
+		t.Errorf("Issues[0].Key = %q, want PROJ-1", result.Issues[0].Key)
+	}
+}
+
+func TestSearchUsersSuccess(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/user/search" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("query"); got != "alice" {
+			t.Errorf("query = %q, want alice", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"accountId": "5b10ac8d82e05b22cc7d4ef5", "displayName": "Alice Example", "emailAddress": "alice@example.com", "active": true}
+		]`))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "test@example.com", "token123")
+	users, err := client.SearchUsers("alice")
+	if err != nil {
+		t.Fatalf("SearchUsers: %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("users count = %d, want 1", len(users))
+	}
+	if users[0].AccountID != "5b10ac8d82e05b22cc7d4ef5" {
+		t.Errorf("AccountID = %q", users[0].AccountID)
+	}
+	if users[0].DisplayName != "Alice Example" {
+		t.Errorf("DisplayName = %q", users[0].DisplayName)
+	}
+}
+
+func TestSearchUsersUnauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "bad@example.com", "wrong")
+	_, err := client.SearchUsers("alice")
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Errorf("expected ErrUnauthorized, got: %v", err)
 	}
 }
 

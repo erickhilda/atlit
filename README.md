@@ -10,6 +10,7 @@ A lightweight CLI to pull Jira Cloud tickets into local markdown files.
 - Dry-run and comments-only update modes
 - Open tickets in your browser directly from the terminal
 - Print file paths for easy piping to other tools
+- Search Jira with preset filters (status, assignee, mine) or raw JQL, listed as a stdout table
 - Fetch Bitbucket Cloud pull requests (diff + comments) as markdown for code-review context
 - Fetch Confluence Cloud pages as markdown (ADF-to-markdown) for offline reading and LLM context
 
@@ -134,6 +135,43 @@ Print the absolute filesystem path to a ticket's markdown file. Useful for scrip
 ```bash
 cat "$(jt path PROJ-123)"
 ```
+
+### `jt search`
+
+Search Jira and list matching tickets as a table on stdout (newest-updated first). Nothing is written to disk — use it to find a ticket, then run `jt pull <KEY>` to fetch it.
+
+Preset filters are composed with `AND` and scoped to `default_project` unless you override the scope. At least one filter is required.
+
+```bash
+jt search --status "code review"                 # one status
+jt search --status "code review,stage test"      # comma-separated -> status in (...)
+jt search --assignee alice                        # name/email resolved to a Jira account
+jt search --mine                                  # assignee = currentUser()
+jt search --mine --active                          # exclude done-category statuses
+jt search --status "stage test" --project FOO     # override the project scope
+jt search --mine --all-projects                   # drop the project scope
+```
+
+`--assignee` resolves a human-friendly name or email to a Jira account via the user-search API; if it matches no one (or several people) it errors and lists the candidates so you can refine. Use `--mine` for yourself (no lookup needed).
+
+For anything the presets can't express, `--jql` takes a raw query. It is a standalone escape hatch and cannot be combined with the preset/scope flags:
+
+```bash
+jt search --jql "project = FOO AND sprint in openSprints() ORDER BY updated DESC"
+```
+
+| Flag | Description |
+|------|-------------|
+| `--status` | Filter by status name; comma-separate for multiple (`status in (...)`) |
+| `--assignee` | Filter by assignee; a name or email resolved to a Jira account |
+| `--mine` | Filter to tickets assigned to you (`assignee = currentUser()`) |
+| `--active` | Exclude done-category statuses (`statusCategory != Done`) |
+| `--jql` | Raw JQL query (advanced; cannot be combined with the preset filters) |
+| `--project` | Restrict to this project key (overrides `default_project`) |
+| `--all-projects` | Do not restrict to a project |
+| `--limit` | Maximum number of tickets to list (default 30; counts rows shown, not the query total) |
+
+The effective JQL is printed above the table for transparency. The table shows the key, summary, status, assignee, and a relative "updated" age.
 
 ### `jt pr <PR-REF>`
 

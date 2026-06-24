@@ -97,7 +97,7 @@ func runSync(cmd *cobra.Command, _ []string) error {
 		jql := fmt.Sprintf("key in (%s) AND updated > \"%s\"",
 			strings.Join(keys, ","), jqlDate)
 
-		result, err := client.SearchIssues(jql, []string{"key"})
+		result, err := client.SearchIssues(jql, []string{"key"}, 0)
 		if err != nil {
 			if errors.Is(err, jira.ErrUnauthorized) {
 				return fmt.Errorf("authentication failed: %w", err)
