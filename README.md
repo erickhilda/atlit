@@ -2,6 +2,8 @@
 
 A lightweight CLI that pulls Atlassian content -- Jira tickets, Bitbucket PRs, and Confluence pages -- into local markdown files.
 
+> **Renamed from `jt` to `atlit` in v0.4.0.** If you're upgrading from a pre-v0.4.0 (`jt`) install, run `atlit migrate` once after installing -- see [Migrating from `jt`](#migrating-from-jt-pre-v040).
+
 ## Features
 
 - Interactive setup with secure token storage (system keyring or encrypted file)
@@ -25,7 +27,7 @@ curl -sSfL https://raw.githubusercontent.com/erickhilda/atlit/master/install.sh 
 To install to a custom directory or pin a version:
 
 ```bash
-curl -sSfL https://raw.githubusercontent.com/erickhilda/atlit/master/install.sh | sh -s -- -d ~/.local/bin -v v0.1.0
+curl -sSfL https://raw.githubusercontent.com/erickhilda/atlit/master/install.sh | sh -s -- -d ~/.local/bin -v v0.4.0
 ```
 
 ### Binary download
@@ -41,6 +43,25 @@ make install
 ```
 
 Requires Go 1.25+.
+
+## Migrating from `jt` (pre-v0.4.0)
+
+This tool was called `jt` (a Jira-only ticket CLI) through v0.3.x. As of **v0.4.0** it is **`atlit`**, reflecting its broader scope across Jira, Bitbucket, and Confluence.
+
+If you install v0.4.0+ over an existing `jt` setup, `atlit` already reads your old state — the legacy `~/.jt` config directory, `jt-cli` keyring tokens, and the `<!-- jt:meta -->` header in previously-pulled files all still work — so nothing breaks immediately. To move that state onto the new names, run:
+
+```bash
+atlit migrate --dry-run   # preview what would change; modifies nothing
+atlit migrate             # apply
+```
+
+`atlit migrate` is idempotent (safe to re-run) and:
+
+- moves `~/.jt` → `~/.atlit` (config + credentials)
+- copies keyring tokens from the `jt-cli` service to `atlit-cli`
+- rewrites the `<!-- jt:meta ... -->` header in your pulled files to `atlit:meta`
+
+Then remove the old binary (e.g. `rm "$(command -v jt)"`). If you skip migration, `atlit` keeps working through its legacy fallbacks — running `migrate` just keeps your on-disk state consistent with the new name.
 
 ## Quick Start
 

@@ -1,6 +1,6 @@
-# atlit — Jira Ticket CLI
+# atlit — Atlassian context CLI
 
-> A lightweight CLI tool to pull Jira Cloud tickets into local markdown files for offline access and LLM context feeding.
+> A lightweight CLI that pulls Atlassian content -- Jira tickets, Bitbucket PRs, and Confluence pages -- into local markdown files for offline access and LLM context feeding.
 
 ---
 
