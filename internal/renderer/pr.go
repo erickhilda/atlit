@@ -34,6 +34,9 @@ func RenderPullRequest(
 	b.WriteString("|-------|-------|\n")
 	writeRow(&b, "State", pr.State)
 	writeRow(&b, "Author", pr.Author.DisplayName)
+	if approvers := approvedBy(pr.Participants); approvers != "" {
+		writeRow(&b, "Approved by", approvers)
+	}
 	writeRow(&b, "Branch", pr.Source.Branch.Name+" -> "+pr.Destination.Branch.Name)
 	if jiraKey != "" {
 		writeRow(&b, "Jira", jiraKey)
@@ -100,4 +103,16 @@ func RenderPullRequest(
 	}
 
 	return strings.TrimRight(b.String(), "\n") + "\n"
+}
+
+// approvedBy returns a comma-joined list of the display names of everyone who
+// approved the pull request. An empty result drops the metadata row entirely.
+func approvedBy(participants []bitbucket.Participant) string {
+	var names []string
+	for _, p := range participants {
+		if p.Approved && p.User.DisplayName != "" {
+			names = append(names, p.User.DisplayName)
+		}
+	}
+	return strings.Join(names, ", ")
 }

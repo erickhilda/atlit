@@ -206,6 +206,7 @@ Atlassian MCP Bitbucket integration isn't available.
 - [x] Milestone 0 — auth spike: validated `email:token` + read scopes against `api.bitbucket.org`
 - [x] Milestone 1 — `internal/bitbucket` client + `atlit pr <id>` (git-remote inference), `--no-diff`, My Notes preservation, `~/.atlit/prs/<workspace>__<repo>__<id>.md`, Jira-key linking
 - [x] `atlit pr list [repo]` — repo-scoped PR table on stdout (`--state` open|merged|declined|all, `--limit`), newest-updated first, Jira-key column; no files written
+- [x] Approvals — `Approved by` row in the saved doc + an `APPROVED BY` column in `atlit pr list`, listing who approved (participants decoded on the single GET, added to the list via `fields=+values.participants`)
 - [ ] Deferred (v2): write-back (approve/comment/merge), `atlit pr view/open/path`, workspace-wide `atlit pr list --workspace` + `--mine`, `--json`, diff path-filtering, Bitbucket Server/DC
 
 ### Phase 8 — Confluence page support (`atlit page`) [DONE]

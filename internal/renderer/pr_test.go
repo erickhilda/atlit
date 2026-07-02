@@ -20,6 +20,12 @@ func samplePR() *bitbucket.PullRequest {
 	pr.Source.Branch.Name = "feature/PROJ-1234_x"
 	pr.Destination.Branch.Name = "develop"
 	pr.Links.HTML.Href = "https://bitbucket.org/acme/widget/pull-requests/42"
+	pr.Participants = []bitbucket.Participant{
+		{User: bitbucket.Account{DisplayName: "Bob"}, Role: "REVIEWER", Approved: true, State: "approved"},
+		{User: bitbucket.Account{DisplayName: "Carol"}, Role: "REVIEWER", State: "changes_requested"},
+		// Pure commenter: no review verdict, so excluded from the Reviewers row.
+		{User: bitbucket.Account{DisplayName: "Dave"}, Role: "PARTICIPANT"},
+	}
 	return pr
 }
 
@@ -41,6 +47,7 @@ func TestRenderPullRequest(t *testing.T) {
 		"<!-- atlit:meta pr=acme/widget/42 fetched=",
 		"# PR #42: Fix bug",
 		"| State | OPEN |",
+		"| Approved by | Bob |",
 		"| Branch | feature/PROJ-1234_x -> develop |",
 		"| Jira | PROJ-1234 |",
 		"> Linked ticket file: /home/me/.jt/tickets/PROJ-1234.md",
@@ -59,6 +66,25 @@ func TestRenderPullRequest(t *testing.T) {
 	}
 	if strings.Contains(out, "gone") {
 		t.Errorf("deleted comment should be skipped:\n%s", out)
+	}
+	if strings.Contains(out, "Carol") {
+		t.Errorf("non-approving reviewer should not appear in the Approved by row:\n%s", out)
+	}
+	if strings.Contains(out, "Dave") {
+		t.Errorf("pure commenter should not appear in the Approved by row:\n%s", out)
+	}
+}
+
+func TestRenderPullRequestNoApprovals(t *testing.T) {
+	pr := samplePR()
+	// Reviewers exist but none approved (changes requested / commented only).
+	pr.Participants = []bitbucket.Participant{
+		{User: bitbucket.Account{DisplayName: "Carol"}, Role: "REVIEWER", State: "changes_requested"},
+		{User: bitbucket.Account{DisplayName: "Dave"}, Role: "PARTICIPANT"},
+	}
+	out := RenderPullRequest(pr, "acme", "widget", nil, "", nil, "", "")
+	if strings.Contains(out, "| Approved by |") {
+		t.Errorf("no approvals should omit the Approved by row:\n%s", out)
 	}
 }
 

@@ -63,6 +63,30 @@ func TestDetectJiraKey(t *testing.T) {
 	}
 }
 
+func TestPRApprovers(t *testing.T) {
+	alice := bitbucket.Participant{User: bitbucket.Account{DisplayName: "Alice"}, Approved: true, State: "approved"}
+	bob := bitbucket.Participant{User: bitbucket.Account{DisplayName: "Bob"}, Approved: true, State: "approved"}
+	changes := bitbucket.Participant{User: bitbucket.Account{DisplayName: "Carol"}, State: "changes_requested"}
+	pending := bitbucket.Participant{User: bitbucket.Account{DisplayName: "Dave"}, Role: "REVIEWER"}
+
+	cases := []struct {
+		name string
+		ps   []bitbucket.Participant
+		want string
+	}{
+		{"none", nil, "-"},
+		{"pending and changes, no approval", []bitbucket.Participant{changes, pending}, "-"},
+		{"one approval", []bitbucket.Participant{alice, pending}, "Alice"},
+		{"two approvals", []bitbucket.Participant{alice, bob}, "Alice, Bob"},
+	}
+	for _, tc := range cases {
+		pr := &bitbucket.PullRequest{Participants: tc.ps}
+		if got := prApprovers(pr); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestPrFileKey(t *testing.T) {
 	if got := prFileKey("acme", "widget", 42); got != "acme__widget__42" {
 		t.Errorf("got %q", got)

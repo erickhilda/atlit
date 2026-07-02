@@ -2,16 +2,17 @@ package bitbucket
 
 // PullRequest is the subset of the Bitbucket Cloud PR object atlit renders.
 type PullRequest struct {
-	ID          int        `json:"id"`
-	Title       string     `json:"title"`
-	State       string     `json:"state"`
-	Description string     `json:"description"`
-	Author      Account    `json:"author"`
-	Source      PREndpoint `json:"source"`
-	Destination PREndpoint `json:"destination"`
-	CreatedOn   string     `json:"created_on"`
-	UpdatedOn   string     `json:"updated_on"`
-	Links       struct {
+	ID           int           `json:"id"`
+	Title        string        `json:"title"`
+	State        string        `json:"state"`
+	Description  string        `json:"description"`
+	Author       Account       `json:"author"`
+	Source       PREndpoint    `json:"source"`
+	Destination  PREndpoint    `json:"destination"`
+	Participants []Participant `json:"participants"`
+	CreatedOn    string        `json:"created_on"`
+	UpdatedOn    string        `json:"updated_on"`
+	Links        struct {
 		HTML Link `json:"html"`
 	} `json:"links"`
 }
@@ -19,6 +20,17 @@ type PullRequest struct {
 // Account is a Bitbucket user reference.
 type Account struct {
 	DisplayName string `json:"display_name"`
+}
+
+// Participant is a user's involvement in a pull request. Bitbucket returns one
+// entry per user who is a designated reviewer or has acted on the PR (approved,
+// requested changes, or commented). It is included by default on the single-PR
+// endpoint; the list endpoint omits it unless requested via field expansion.
+type Participant struct {
+	User     Account `json:"user"`
+	Role     string  `json:"role"` // "REVIEWER" | "PARTICIPANT"
+	Approved bool    `json:"approved"`
+	State    string  `json:"state"` // "approved" | "changes_requested" | ""
 }
 
 // PREndpoint is one side (source/destination) of a pull request.

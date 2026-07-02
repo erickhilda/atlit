@@ -213,6 +213,8 @@ atlit pr acme/widget/4521        # fully explicit
 
 PRs are saved to `prs_dir` (default `~/.atlit/prs`) as `<workspace>__<repo>__<id>.md`. A `## My Notes` section is preserved across re-fetches, and if the PR's branch/title contains a Jira key (e.g. `PROJ-1234`) it is linked — with a pointer to the local ticket file when one exists.
 
+The metadata table includes an `Approved by` row listing the display name(s) of everyone who approved the PR. The row is omitted when no one has approved.
+
 The full unified diff is embedded by default; on a large diff `atlit pr` prints a warning (it never silently truncates) so you can re-run with `--no-diff`.
 
 ### `atlit pr list [REPO-REF]`
@@ -232,7 +234,7 @@ atlit pr list acme/widget        # fully explicit
 | `--state` | Filter by state: `open` (default), `merged`, `declined`, or `all` |
 | `--limit` | Maximum number of PRs to list (default 30; counts rows shown, not the repo total) |
 
-The table shows the PR id, title, linked Jira key (from the branch/title, `-` when absent), author, and a relative "updated" age. The `--limit` count caps the rows fetched, so the header count reflects what was shown rather than the repository's full PR total.
+The table shows the PR id, title, linked Jira key (from the branch/title, `-` when absent), author, who approved, and a relative "updated" age. The `APPROVED BY` column lists the display name(s) of anyone who has approved the PR (`-` when no one has yet). The `--limit` count caps the rows fetched, so the header count reflects what was shown rather than the repository's full PR total.
 
 ### `atlit page <PAGE-ID | URL>`
 

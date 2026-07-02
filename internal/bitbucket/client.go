@@ -116,6 +116,10 @@ func (c *Client) ListPullRequests(workspace, repo string, states []string, limit
 	q := url.Values{}
 	q.Set("pagelen", "50")
 	q.Set("sort", "-updated_on")
+	// The list endpoint omits participants from its abbreviated PR objects; the
+	// "+" prefix adds them back without dropping the other default fields, so the
+	// review column can be filled without a per-PR follow-up call.
+	q.Set("fields", "+values.participants")
 	for _, s := range states {
 		q.Add("state", s)
 	}

@@ -27,7 +27,11 @@ func TestGetPullRequest(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":42,"title":"Fix bug","state":"OPEN",
 			"author":{"display_name":"Alice"},
 			"source":{"branch":{"name":"feature/PROJ-1-x"}},
-			"destination":{"branch":{"name":"develop"}}}`))
+			"destination":{"branch":{"name":"develop"}},
+			"participants":[
+				{"user":{"display_name":"Bob"},"role":"REVIEWER","approved":true,"state":"approved"},
+				{"user":{"display_name":"Carol"},"role":"REVIEWER","approved":false,"state":"changes_requested"}
+			]}`))
 	}))
 	defer ts.Close()
 
@@ -40,6 +44,15 @@ func TestGetPullRequest(t *testing.T) {
 	}
 	if pr.Author.DisplayName != "Alice" {
 		t.Errorf("author = %q", pr.Author.DisplayName)
+	}
+	if len(pr.Participants) != 2 {
+		t.Fatalf("got %d participants, want 2", len(pr.Participants))
+	}
+	if p := pr.Participants[0]; p.User.DisplayName != "Bob" || !p.Approved {
+		t.Errorf("participant[0] = %+v, want Bob approved", p)
+	}
+	if p := pr.Participants[1]; p.Approved || p.State != "changes_requested" {
+		t.Errorf("participant[1] = %+v, want unapproved changes_requested", p)
 	}
 	if pr.Source.Branch.Name != "feature/PROJ-1-x" || pr.Destination.Branch.Name != "develop" {
 		t.Errorf("branches = %q -> %q", pr.Source.Branch.Name, pr.Destination.Branch.Name)
@@ -102,7 +115,7 @@ func TestGetPullRequestCommentsPagination(t *testing.T) {
 
 func TestListPullRequestsPagination(t *testing.T) {
 	var gotStates []string
-	var gotSort, gotPagelen string
+	var gotSort, gotPagelen, gotFields string
 	var ts *httptest.Server
 	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") == "2" {
@@ -113,7 +126,8 @@ func TestListPullRequestsPagination(t *testing.T) {
 		gotStates = q["state"]
 		gotSort = q.Get("sort")
 		gotPagelen = q.Get("pagelen")
-		_, _ = fmt.Fprintf(w, `{"values":[{"id":1,"title":"One"}],"next":"%s/repositories/ws/repo/pullrequests?page=2"}`, ts.URL)
+		gotFields = q.Get("fields")
+		_, _ = fmt.Fprintf(w, `{"values":[{"id":1,"title":"One","participants":[{"user":{"display_name":"Bob"},"approved":true,"state":"approved"}]}],"next":"%s/repositories/ws/repo/pullrequests?page=2"}`, ts.URL)
 	}))
 	defer ts.Close()
 
@@ -124,6 +138,9 @@ func TestListPullRequestsPagination(t *testing.T) {
 	if len(prs) != 2 || prs[0].ID != 1 || prs[1].ID != 2 {
 		t.Fatalf("got %d PRs %v, want ids 1,2", len(prs), prs)
 	}
+	if len(prs[0].Participants) != 1 || !prs[0].Participants[0].Approved {
+		t.Errorf("participants not decoded from list values: %+v", prs[0].Participants)
+	}
 	if strings.Join(gotStates, ",") != "OPEN,MERGED" {
 		t.Errorf("state params = %v, want [OPEN MERGED]", gotStates)
 	}
@@ -132,6 +149,9 @@ func TestListPullRequestsPagination(t *testing.T) {
 	}
 	if gotPagelen != "50" {
 		t.Errorf("pagelen = %q, want 50", gotPagelen)
+	}
+	if gotFields != "+values.participants" {
+		t.Errorf("fields = %q, want +values.participants", gotFields)
 	}
 }
 

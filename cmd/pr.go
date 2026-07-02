@@ -165,7 +165,7 @@ func printPRList(workspace, repo, label string, prs []bitbucket.PullRequest) {
 	}
 
 	fmt.Printf("%s PRs: %s/%s (%d)\n\n", label, workspace, repo, len(prs))
-	fmt.Printf("%-6s %-40s %-16s %-14s %s\n", "#", "TITLE", "JIRA", "AUTHOR", "UPDATED")
+	fmt.Printf("%-6s %-40s %-16s %-14s %-24s %s\n", "#", "TITLE", "JIRA", "AUTHOR", "APPROVED BY", "UPDATED")
 
 	now := time.Now()
 	for i := range prs {
@@ -174,14 +174,30 @@ func printPRList(workspace, repo, label string, prs []bitbucket.PullRequest) {
 		if jira == "" {
 			jira = "-"
 		}
-		fmt.Printf("%-6d %-40s %-16s %-14s %s\n",
+		fmt.Printf("%-6d %-40s %-16s %-14s %-24s %s\n",
 			pr.ID,
 			truncate(pr.Title, 40),
 			jira,
 			truncate(pr.Author.DisplayName, 14),
+			truncate(prApprovers(pr), 24),
 			formatPRUpdated(now, pr.UpdatedOn),
 		)
 	}
+}
+
+// prApprovers lists the display names of everyone who approved the PR, or "-"
+// when no one has approved yet.
+func prApprovers(pr *bitbucket.PullRequest) string {
+	var names []string
+	for _, p := range pr.Participants {
+		if p.Approved && p.User.DisplayName != "" {
+			names = append(names, p.User.DisplayName)
+		}
+	}
+	if len(names) == 0 {
+		return "-"
+	}
+	return strings.Join(names, ", ")
 }
 
 // truncate shortens s to at most max runes, marking elision with an ellipsis.
