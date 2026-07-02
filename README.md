@@ -9,6 +9,8 @@ A lightweight CLI that pulls Atlassian content -- Jira tickets, Bitbucket PRs, a
 - Interactive setup with secure token storage (system keyring or encrypted file)
 - Fetch Jira tickets as markdown with full ADF-to-markdown conversion
 - Preserves a local "My Notes" section across re-pulls
+- Push locally-edited description sections back to Jira (write-back), guarded against overwriting newer remote changes
+- Keep the local set fresh: diff a ticket against Jira, bulk-sync changed tickets, and check staleness offline
 - Dry-run and comments-only update modes
 - Open tickets in your browser directly from the terminal
 - Print file paths for easy piping to other tools
@@ -137,6 +139,31 @@ Fetch a Jira ticket and save it as local markdown.
 
 The pull command preserves any content you've written under the `## My Notes` section.
 
+### `atlit push <TICKET-KEY>`
+
+Push locally-edited sections of a ticket back to the Jira **description** — the write counterpart to `atlit pull`. Edit a pulled ticket's markdown, then send the changes upstream. This is the only command that writes to Jira; everything else is read-only.
+
+Deliberately narrow to avoid clobbering a ticket:
+
+- Only the sections named by `--sections` are considered (default: `Technical Requirements` and `Release Notes`). The rest of the description, the field table, comments, and your `## My Notes` are never touched.
+- Only sections whose local content **differs** from the current remote content are pushed; unchanged ones are skipped.
+- A target section present locally but missing on the remote is appended to the description; one absent locally is skipped.
+
+Before writing, `atlit push` re-fetches the ticket and refuses to push if Jira was updated after your last pull (a lost-update guard — an unrecognized remote timestamp fails closed). If that happens, run `atlit pull <KEY>` (or `atlit sync`), re-apply your edits, and push again.
+
+```bash
+atlit push PROJ-123                                        # push changed default sections
+atlit push PROJ-123 --dry-run                               # preview the ADF that would be sent
+atlit push PROJ-123 --sections "Technical Requirements"     # restrict to one section
+```
+
+| Flag | Description |
+|------|-------------|
+| `--sections` | Comma-separated section headings to push, without the `##` prefix (default: `Technical Requirements,Release Notes`) |
+| `--dry-run` | Print the sections that would change and the full updated description ADF, without writing to Jira |
+
+Requires a ticket already pulled locally — `atlit push` reads the `atlit:meta` header to know when you last fetched. Run `atlit pull <KEY>` first if you haven't.
+
 ### `atlit view <TICKET-KEY>`
 
 Print the local ticket markdown to stdout. Useful for piping:
@@ -156,6 +183,52 @@ Print the absolute filesystem path to a ticket's markdown file. Useful for scrip
 ```bash
 cat "$(atlit path PROJ-123)"
 ```
+
+### `atlit diff <TICKET-KEY>`
+
+Fetch the latest version from Jira and print a unified diff against your local file — nothing is written. Use it to preview what an `atlit pull` would change. Additions (the remote side) are green, removals (your local side) are red.
+
+To keep the two sides comparable, a few local-only blocks are excluded from the comparison so they never show as phantom diffs:
+
+- `## My Notes` is carried over to the remote side (your notes never diff).
+- `## Pull Requests` is dropped — `diff` doesn't query the development panel.
+- `## Comments` is dropped when `fetch_comments` is `false`.
+
+```bash
+atlit diff PROJ-123
+atlit diff PROJ-123 --color never   # plain output, e.g. when piping
+```
+
+| Flag | Description |
+|------|-------------|
+| `--color` | Colorize output: `auto` (default; color only on a TTY), `always`, or `never` |
+
+### `atlit sync`
+
+Re-pull every locally saved ticket that has changed on Jira since you last fetched it. atlit takes the oldest local fetch time, asks Jira which of your saved tickets were updated after that, and re-pulls only those — so an already-fresh library makes no changes.
+
+Each re-pull preserves your `## My Notes`, and keeps existing `## Comments` / `## Pull Requests` blocks when those aren't being fetched (per `fetch_comments` / `fetch_pull_requests`). A ticket that errors is reported and skipped rather than aborting the whole run.
+
+```bash
+atlit sync                       # sync all local tickets
+atlit sync --project PROJ        # only tickets whose key starts with PROJ
+atlit sync --dry-run             # list what would be synced, fetch nothing
+```
+
+| Flag | Description |
+|------|-------------|
+| `--project`, `-p` | Only sync tickets for this project prefix |
+| `--dry-run` | Show which tickets would be synced (with their current age) without fetching |
+
+### `atlit status`
+
+Show an overview of your local tickets, grouped by project. Purely local — no API calls are made.
+
+```bash
+atlit status
+```
+
+The header totals how many tickets are **stale** (>24h since last fetch) and **very stale** (>7d). Each project group lists every ticket's key, last-fetched timestamp, and a relative age. Refresh stale tickets with `atlit sync` (or `atlit pull <KEY>`).
 
 ### `atlit search`
 

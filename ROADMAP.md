@@ -141,17 +141,17 @@ token_storage: keyring         # or "file" if keyring unavailable
 **Local notes preservation:**
 If the user adds a `## My Notes` section at the bottom of the file, `atlit pull` should preserve it across updates. This lets you annotate tickets locally.
 
-### Phase 3 — Sync & Diff (Days 8–10)
+### Phase 3 — Sync & Diff (Days 8–10) [DONE]
 
 **Goal:** Keep local files fresh with minimal effort.
 
-- [ ] `atlit sync` — Re-pull all locally saved tickets that have been updated on Jira since last fetch
-  - Uses `updated` field from Jira REST API
-  - Only fetches tickets where remote `updated > local fetched` timestamp
-- [ ] `atlit sync --project PROJ` — Sync only tickets from a specific project
-- [ ] `atlit diff <TICKET-KEY>` — Show what changed since last pull (like `git diff`)
-  - Color-coded: new comments in green, status changes highlighted
-- [ ] `atlit status` — Overview of all local tickets: how many are stale, recently updated, etc.
+- [x] `atlit sync` — Re-pull all locally saved tickets that have been updated on Jira since last fetch
+  - Threshold JQL: `key in (...) AND updated > "<oldest local fetch>"`, batched at 100 keys per query
+  - Preserves `## My Notes` and keeps `## Comments` / `## Pull Requests` when those aren't fetched; per-ticket errors are reported and skipped
+- [x] `atlit sync --project PROJ` — Sync only tickets whose key starts with that prefix; `--dry-run` lists what would sync without fetching
+- [x] `atlit diff <TICKET-KEY>` — Fetch the latest from Jira and print a unified diff vs. the local file (nothing written)
+  - `--color auto|always|never` (auto = color only on a TTY); local-only `## My Notes` / `## Pull Requests` (and `## Comments` when not fetched) excluded to avoid phantom diffs
+- [x] `atlit status` — Local-only overview (no API calls): total, stale (>24h) / very-stale (>7d) counts, grouped by project with per-ticket fetch age
 
 ### Phase 4 — Search & List (Days 11–13)
 
@@ -241,6 +241,29 @@ through to `default` and emitted nothing.
   and rewrite refs to relative paths (self-contained, offline, multimodal); Bitbucket
   PR image download
 
+### Phase 10 — Ticket write-back (`atlit push`) [DONE]
+
+**Goal:** Push locally-edited description sections back to Jira — the write
+counterpart to `atlit pull`, and the tool's first write operation (everything
+through Phase 9 is read-only).
+
+Deliberately narrow: only named sections of the description are editable, so a
+stray local edit elsewhere can never clobber the remote ticket. This is the first
+of the write-backs; `atlit comment` / `atlit transition` (Phase 6) remain pending.
+
+- [x] `internal/jira` — `MarkdownToADF` (markdown -> ADF nodes), `SpliceSection`
+  (replace a heading's body in a description ADF, or append the section if absent),
+  `UpdateDescription` (`PUT /rest/api/3/issue/{key}` with the new `description`)
+- [x] `atlit push <TICKET-KEY>` — diff local vs. remote per section, push only the
+  changed ones; `--sections` (default `Technical Requirements,Release Notes`),
+  `--dry-run` (prints target sections + full ADF). Only the description is written —
+  field table, comments, and `## My Notes` are untouched.
+- [x] Lost-update guard — re-fetch before writing and refuse if Jira's `updated` is
+  newer than the local `fetched`; fail-closed on an unparseable timestamp (parses
+  Jira Cloud's non-RFC3339 numeric offsets like `+0700`). Tells the user to re-pull.
+- [ ] Deferred (v2): push arbitrary / full-description sections, push `## My Notes`
+  as a comment, `--sections` presets, a 3-way merge instead of the hard staleness stop
+
 ---
 
 ## Architecture
@@ -307,6 +330,7 @@ All via Jira Cloud REST API v3 (`/rest/api/3/`):
 | `GET /rest/api/3/search/jql?jql=...` | `atlit search`, `atlit sync` |
 | `GET /rest/api/3/user/search?query=...` | `atlit search --assignee` (name -> accountId) |
 | `GET /rest/api/3/myself` | `atlit auth test` |
+| `PUT /rest/api/3/issue/{key}` | `atlit push` — update the description field |
 | `GET /rest/api/3/project/{key}` | Project info |
 | `POST /rest/api/3/issue/{key}/comment` | `atlit comment` (Phase 6) |
 | `POST /rest/api/3/issue/{key}/transitions` | `atlit transition` (Phase 6) |
