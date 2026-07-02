@@ -63,6 +63,7 @@ As a user, I want to authenticate via OAuth2 so that...
 ## Pull Requests (1)
 
 - [MERGED] [PROJ-123: implement OAuth2 flow](https://bitbucket.org/acme/repo/pull-requests/42) (#42)
+  - Repo: acme/repo
   - Branch: feature/PROJ-123 -> develop
   - Author: Alice
   - Approved by: Bob
