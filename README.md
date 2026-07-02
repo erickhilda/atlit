@@ -391,6 +391,7 @@ The ticket description converted from Atlassian Document Format to markdown.
 ## Pull Requests (1)
 
 - [MERGED] [PROJ-123: implement OAuth2 flow](https://bitbucket.org/acme/repo/pull-requests/42) (#42)
+  - Repo: acme/repo
   - Branch: feature/PROJ-123 -> develop
   - Author: Alice
   - Approved by: Bob

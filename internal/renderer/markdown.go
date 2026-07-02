@@ -193,6 +193,9 @@ func writePullRequests(b *strings.Builder, prs []jira.PullRequest) {
 		}
 		b.WriteString("\n")
 
+		if pr.RepositoryName != "" {
+			fmt.Fprintf(b, "  - Repo: %s\n", pr.RepositoryName)
+		}
 		if pr.Source != nil && pr.Source.Branch != "" {
 			dest := ""
 			if pr.Destination != nil && pr.Destination.Branch != "" {

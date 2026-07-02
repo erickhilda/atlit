@@ -184,14 +184,15 @@ func TestRenderIssuePullRequests(t *testing.T) {
 		},
 		PullRequests: []jira.PullRequest{
 			{
-				ID:          "#42",
-				Name:        "Add feature",
-				URL:         "https://bitbucket.org/x/repo/pull-requests/42",
-				Status:      "MERGED",
-				Author:      &jira.DevUser{Name: "alice"},
-				Source:      &jira.DevBranch{Branch: "feature/TEST-PR"},
-				Destination: &jira.DevBranch{Branch: "develop"},
-				Reviewers:   []jira.DevUser{{Name: "bob", Approved: true}, {Name: "carol", Approved: false}},
+				ID:             "#42",
+				Name:           "Add feature",
+				URL:            "https://bitbucket.org/x/repo/pull-requests/42",
+				Status:         "MERGED",
+				Author:         &jira.DevUser{Name: "alice"},
+				Source:         &jira.DevBranch{Branch: "feature/TEST-PR"},
+				Destination:    &jira.DevBranch{Branch: "develop"},
+				Reviewers:      []jira.DevUser{{Name: "bob", Approved: true}, {Name: "carol", Approved: false}},
+				RepositoryName: "acme/widget",
 			},
 		},
 	}
@@ -200,6 +201,7 @@ func TestRenderIssuePullRequests(t *testing.T) {
 	for _, want := range []string{
 		"## Pull Requests (1)",
 		"- [MERGED] [Add feature](https://bitbucket.org/x/repo/pull-requests/42) (#42)",
+		"  - Repo: acme/widget",
 		"  - Branch: feature/TEST-PR -> develop",
 		"  - Author: alice",
 		"  - Approved by: bob",

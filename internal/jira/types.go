@@ -29,9 +29,9 @@ type Issue struct {
 // The Fields value is kept as raw JSON so we can extract custom fields
 // after identifying them via the "names" map from ?expand=names.
 type IssueRaw struct {
-	ID     string          `json:"id"`
-	Key    string          `json:"key"`
-	Fields json.RawMessage `json:"fields"`
+	ID     string            `json:"id"`
+	Key    string            `json:"key"`
+	Fields json.RawMessage   `json:"fields"`
 	Names  map[string]string `json:"names"`
 }
 
@@ -174,6 +174,9 @@ type PullRequest struct {
 	Source      *DevBranch `json:"source"`
 	Destination *DevBranch `json:"destination"`
 	Reviewers   []DevUser  `json:"reviewers"`
+	// RepositoryName is the human-readable repo, e.g. "acme/widget" for
+	// Bitbucket Cloud (workspace/repo slugs).
+	RepositoryName string `json:"repositoryName"`
 	// AppType is the source application (e.g. "bitbucket", "github"). Set by
 	// the client from the dev-status query, not present in the PR JSON itself.
 	AppType string `json:"-"`
@@ -225,11 +228,11 @@ type ADFDoc struct {
 
 // ADFNode is a node in the ADF tree (paragraph, heading, text, etc.).
 type ADFNode struct {
-	Type    string            `json:"type"`
-	Text    string            `json:"text,omitempty"`
-	Content []ADFNode         `json:"content,omitempty"`
-	Marks   []ADFMark         `json:"marks,omitempty"`
-	Attrs   map[string]any    `json:"attrs,omitempty"`
+	Type    string         `json:"type"`
+	Text    string         `json:"text,omitempty"`
+	Content []ADFNode      `json:"content,omitempty"`
+	Marks   []ADFMark      `json:"marks,omitempty"`
+	Attrs   map[string]any `json:"attrs,omitempty"`
 }
 
 // ADFMark represents inline formatting (bold, italic, link, etc.).

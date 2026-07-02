@@ -635,12 +635,13 @@ const devStatusDetailJSON = `{
         {
           "id": "#42",
           "name": "Add feature",
-          "url": "https://bitbucket.org/x/repo/pull-requests/42",
+          "url": "https://bitbucket.org/{1111aaaa-2222-bbbb-3333-cccc4444dddd}/{5555eeee-6666-ffff-7777-aaaa8888bbbb}/pull-requests/42",
           "status": "MERGED",
           "author": {"name": "alice"},
           "source": {"branch": "feature/PROJ-123"},
           "destination": {"branch": "develop"},
-          "reviewers": [{"name": "bob", "approved": true}]
+          "reviewers": [{"name": "bob", "approved": true}],
+          "repositoryName": "acme/widget"
         }
       ]
     }
@@ -688,6 +689,62 @@ func TestGetPullRequestsSuccess(t *testing.T) {
 	}
 	if pr.Author == nil || pr.Author.Name != "alice" {
 		t.Errorf("expected author alice, got %+v", pr.Author)
+	}
+	if pr.RepositoryName != "acme/widget" {
+		t.Errorf("RepositoryName = %q, want acme/widget", pr.RepositoryName)
+	}
+	if want := "https://bitbucket.org/acme/widget/pull-requests/42"; pr.URL != want {
+		t.Errorf("URL = %q, want %q (uuid segments should be humanized)", pr.URL, want)
+	}
+}
+
+func TestHumanizePRURL(t *testing.T) {
+	tests := []struct {
+		name, rawURL, repoName, want string
+	}{
+		{
+			name:     "uuid segments replaced",
+			rawURL:   "https://bitbucket.org/{1111aaaa-2222-bbbb-3333-cccc4444dddd}/{5555eeee-6666-ffff-7777-aaaa8888bbbb}/pull-requests/42",
+			repoName: "acme/widget",
+			want:     "https://bitbucket.org/acme/widget/pull-requests/42",
+		},
+		{
+			name:     "empty workspace uuid",
+			rawURL:   "https://bitbucket.org/{}/{5555eeee-6666-ffff-7777-aaaa8888bbbb}/pull-requests/42",
+			repoName: "acme/widget",
+			want:     "https://bitbucket.org/acme/widget/pull-requests/42",
+		},
+		{
+			name:     "already readable passes through",
+			rawURL:   "https://bitbucket.org/acme/widget/pull-requests/42",
+			repoName: "acme/widget",
+			want:     "https://bitbucket.org/acme/widget/pull-requests/42",
+		},
+		{
+			name:     "no repository name",
+			rawURL:   "https://bitbucket.org/{1111aaaa-2222-bbbb-3333-cccc4444dddd}/{5555eeee-6666-ffff-7777-aaaa8888bbbb}/pull-requests/42",
+			repoName: "",
+			want:     "https://bitbucket.org/{1111aaaa-2222-bbbb-3333-cccc4444dddd}/{5555eeee-6666-ffff-7777-aaaa8888bbbb}/pull-requests/42",
+		},
+		{
+			name:     "unexpected repo name shape left alone",
+			rawURL:   "https://bitbucket.org/{1111aaaa-2222-bbbb-3333-cccc4444dddd}/{5555eeee-6666-ffff-7777-aaaa8888bbbb}/pull-requests/42",
+			repoName: "widget",
+			want:     "https://bitbucket.org/{1111aaaa-2222-bbbb-3333-cccc4444dddd}/{5555eeee-6666-ffff-7777-aaaa8888bbbb}/pull-requests/42",
+		},
+		{
+			name:     "github url untouched",
+			rawURL:   "https://github.com/acme/widget/pull/42",
+			repoName: "acme/widget",
+			want:     "https://github.com/acme/widget/pull/42",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := humanizePRURL(tt.rawURL, tt.repoName); got != tt.want {
+				t.Errorf("humanizePRURL(%q, %q) = %q, want %q", tt.rawURL, tt.repoName, got, tt.want)
+			}
+		})
 	}
 }
 

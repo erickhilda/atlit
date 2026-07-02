@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -490,7 +491,29 @@ func (c *Client) devStatusPRDetail(issueID, appType string) ([]PullRequest, erro
 	for _, d := range detail.Detail {
 		prs = append(prs, d.PullRequests...)
 	}
+	for i := range prs {
+		prs[i].URL = humanizePRURL(prs[i].URL, prs[i].RepositoryName)
+	}
 	return prs, nil
+}
+
+// uuidPRURLPattern matches dev-status PR URLs whose workspace/repo path
+// segments are UUIDs in braces, as Bitbucket Cloud returns them, e.g.
+// https://bitbucket.org/{ws-uuid}/{repo-uuid}/pull-requests/42.
+var uuidPRURLPattern = regexp.MustCompile(`^(https?://[^/]+)/\{[^}/]*\}/\{[^}/]*\}(/.*)$`)
+
+// humanizePRURL replaces the {uuid}/{uuid} workspace/repo segments in a
+// dev-status PR URL with the human-readable "workspace/repo" name when the
+// payload provides one. URLs that are already readable pass through unchanged.
+func humanizePRURL(rawURL, repoFullName string) string {
+	if repoFullName == "" || strings.Count(repoFullName, "/") != 1 {
+		return rawURL
+	}
+	m := uuidPRURLPattern.FindStringSubmatch(rawURL)
+	if m == nil {
+		return rawURL
+	}
+	return m[1] + "/" + repoFullName + m[2]
 }
 
 // readAndClose reads the full body and closes it, returning data and status code.
